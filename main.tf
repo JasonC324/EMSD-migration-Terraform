@@ -170,6 +170,7 @@ resource "azurerm_application_gateway" "DOBA_Web-WAF-v2" {
   sku {
     name     = "WAF_v2"
     tier     = "WAF_v2"
+    capacity = 1
   }
 
   gateway_ip_configuration {
@@ -284,148 +285,542 @@ resource "azurerm_application_gateway" "DOBA_Web-WAF-v2" {
 # Section D
 # ========================================================================================
 
+
+# ========================================================================================
+# Network Security Group
+# ========================================================================================
+
+# Network Security Group DOBA-AgentTier-subnet-nsg
+resource "azurerm_network_security_group" "DOBA-AgentTier-subnet-nsg" {
+  name                = "DOBA-AgentTier-subnet-nsg"
+  location            = azurerm_resource_group.emsd_doba.location
+  resource_group_name = azurerm_resource_group.emsd_doba.name
+
+  security_rule {
+    name                       = "DenyCidrBlockCustomAnyInbound"
+    priority                   = 101
+    direction                  = "Inbound"
+    access                     = "Deny"
+    protocol                   = "*"
+    source_port_range          = "*"
+    destination_port_range     = "*"
+    source_address_prefixes     = var.DenyCidrBlockCustomAnyInbound_addresses
+    destination_address_prefix = "*"
+  }
+
+  security_rule {
+    name                       = "allow-webtier-http"
+    priority                   = 110
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "80"
+    destination_port_range     = "*"
+    source_address_prefixes      = var.webtier-subnet_address_space
+    destination_address_prefix = "*"
+  }
+
+  security_rule {
+    name                       = "allow-webtier-http"
+    priority                   = 120
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "443"
+    destination_port_range     = "*"
+    source_address_prefixes      = var.webtier-subnet_address_space
+    destination_address_prefix = "*"
+  }
+
+  security_rule {
+    name                       = "allow-VPN_100-rdp"
+    priority                   = 210
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "3389"
+    destination_port_range     = "*"
+    source_address_prefixes      = var.vpngw_address_space
+    destination_address_prefix = "*"
+  }
+
+  security_rule {
+    name                       = "allow-any-rdp"
+    priority                   = 230
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "3389"
+    destination_port_range     = "*"
+    source_address_prefix      = "VirtualNetwork"
+    destination_address_prefix = "*"
+  }
+
+  security_rule {
+    name                       = "allow-VPN_100-http"
+    priority                   = 240
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "80"
+    destination_port_range     = "*"
+    source_address_prefixes      = var.vpngw_address_space
+    destination_address_prefix = "*"
+  }
+
+  security_rule {
+    name                       = "allow-VPN_100-https"
+    priority                   = 250
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "443"
+    destination_port_range     = "*"
+    source_address_prefixes      = var.vpngw_address_space
+    destination_address_prefix = "*"
+  }
+
+  security_rule {
+    name                       = "temp-allow-asl-inbound-rdp"
+    priority                   = 500
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "3389"
+    destination_port_range     = "*"
+    source_address_prefix      = "112.118.234.11"
+    destination_address_prefix = "*"
+  }
+
+  security_rule {
+    name                       = "allow-DOBA_LB_AgentAV-http"
+    priority                   = 900
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "80"
+    destination_port_range     = "*"
+    source_address_prefix      = "AzureLoadBalancer"
+    destination_address_prefix = "*"
+  }
+
+  security_rule {
+    name                       = "allow-DOBA_LB_AgentAV-https"
+    priority                   = 910
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "443"
+    destination_port_range     = "*"
+    source_address_prefix      = "AzureLoadBalancer"
+    destination_address_prefix = "*"
+  }
+
+  security_rule {
+    name                       = "deny-all-inbound-tcp"
+    priority                   = 1010
+    direction                  = "Inbound"
+    access                     = "Deny"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "*"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
+
+  security_rule {
+    name                       = "deny-all-inbound-udp"
+    priority                   = 1020
+    direction                  = "Inbound"
+    access                     = "Deny"
+    protocol                   = "Udp"
+    source_port_range          = "*"
+    destination_port_range     = "*"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
+
+  security_rule {
+    name                       = "allow-all-inbound"
+    priority                   = 1030
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "*"
+    source_port_range          = "*"
+    destination_port_range     = "*"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
+}
+
+# Security Group bound with network 
+resource "azurerm_subnet_network_security_group_association" "emsd-doba-agenttier-subnet_security_group_association" {
+  subnet_id                 = azurerm_subnet.emsd-doba-agenttier-subnet.id
+  network_security_group_id = azurerm_network_security_group.DOBA-AgentTier-subnet-nsg.id
+}
+
+# Security Group for VM DOBA-AGT1
+resource "azurerm_network_security_group" "DOBA-AGT1-nsg" {
+  name                = "DOBA-AGT1-nsg"
+  location            = azurerm_resource_group.emsd_doba.location
+  resource_group_name = azurerm_resource_group.emsd_doba.name
+
+  security_rule {
+    name                       = "AllowCidrBlockCustomAnyInbound"
+    priority                   = 101
+    direction                  = "Inbound"
+    access                     = "Deny"
+    protocol                   = "Tcp"
+    source_port_ranges          = ["80", "443", "3389", "8080"]
+    destination_port_range     = "*"
+    source_address_prefixes     = var.DenyCidrBlockCustomAnyInbound2_addresses
+    destination_address_prefix = "*"
+  }
+
+  security_rule {
+    name                       = "allow-VPN-HTTP"
+    priority                   = 105
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "80"
+    destination_port_range     = "*"
+    source_address_prefixes      = var.vpngw_address_space
+    destination_address_prefix = "*"
+  }
+
+  security_rule {
+    name                       = "allow-VPN-HTTPS"
+    priority                   = 200
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "443"
+    destination_port_range     = "*"
+    source_address_prefixes      = var.vpngw_address_space
+    destination_address_prefix = "*"
+  }
+
+  security_rule {
+    name                       = "default-allow-rdp"
+    priority                   = 1000
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "3389"
+    destination_port_range     = "*"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
+}
+
+# Security Group for VM DOBA-AGT2
+resource "azurerm_network_security_group" "DOBA-AGT2-nsg" {
+  name                = "DOBA-AGT2-nsg"
+  location            = azurerm_resource_group.emsd_doba.location
+  resource_group_name = azurerm_resource_group.emsd_doba.name
+
+  security_rule {
+    name                       = "AllowCidrBlockCustomAnyInbound"
+    priority                   = 101
+    direction                  = "Inbound"
+    access                     = "Deny"
+    protocol                   = "Tcp"
+    source_port_range         = "*"
+    destination_port_range     = "*"
+    source_address_prefixes     = var.DenyCidrBlockCustomAnyInbound_addresses
+    destination_address_prefix = "*"
+  }
+
+  security_rule {
+    name                       = "allow-VPN-HTTP"
+    priority                   = 105
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "80"
+    destination_port_range     = "*"
+    source_address_prefixes      = var.vpngw_address_space
+    destination_address_prefix = "*"
+  }
+
+  security_rule {
+    name                       = "allow-VPN-HTTPS"
+    priority                   = 200
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "443"
+    destination_port_range     = "*"
+    source_address_prefixes      = var.vpngw_address_space
+    destination_address_prefix = "*"
+  }
+
+  security_rule {
+    name                       = "default-allow-rdp"
+    priority                   = 1000
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "3389"
+    destination_port_range     = "*"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
+}
+
+# Security Group for Storage DOBA-FE1
+resource "azurerm_network_security_group" "DOBA-FE1-nsg" {
+  name                = "DOBA-FE1-nsg"
+  location            = azurerm_resource_group.emsd_doba.location
+  resource_group_name = azurerm_resource_group.emsd_doba.name
+
+  security_rule {
+    name                       = "DenyCidrBlockCustom8080Inbound"
+    priority                   = 101
+    direction                  = "Inbound"
+    access                     = "Deny"
+    protocol                   = "Tcp"
+    source_port_ranges          = ["80", "443", "8080", "3389"]
+    destination_port_range     = "*"
+    source_address_prefixes     = var.DenyCidrBlockCustomAnyInbound_addresses
+    destination_address_prefix = "*"
+  }
+
+  security_rule {
+    name                       = "allow-https"
+    priority                   = 105
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "443"
+    destination_port_range     = "*"
+    source_address_prefix    = "*"
+    destination_address_prefix = "*"
+  }
+
+  security_rule {
+    name                       = "allow-http"
+    priority                   = 110
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "80"
+    destination_port_range     = "*"
+    source_address_prefix    = "*"
+    destination_address_prefix = "*"
+  }
+
+  security_rule {
+    name                       = "default-allow-rdp"
+    priority                   = 1000
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "3389"
+    destination_port_range     = "*"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
+
+  security_rule {
+    name                       = "TestingblockIP"
+    priority                   = 1020
+    direction                  = "Inbound"
+    access                     = "Deny"
+    protocol                   = "Tcp"
+    source_port_ranges          = ["8080", "443", "80", "3389"]
+    destination_port_range     = "*"
+    source_address_prefix     = "86.8.69.179"
+    destination_address_prefix = "*"
+  }
+}
+
+# Security Group for Storage DOBA-FE2-v2
+resource "azurerm_network_security_group" "DOBA-FE2-v2-nsg" {
+  name                = "DOBA-FE2-v2-nsg"
+  location            = azurerm_resource_group.emsd_doba.location
+  resource_group_name = azurerm_resource_group.emsd_doba.name
+
+  security_rule {
+    name                       = "RDP"
+    priority                   = 300
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "3389"
+    destination_port_range     = "*"
+    source_address_prefix     = "*"
+    destination_address_prefix = "*"
+  }
+}
+
+# Security Group for vm doba-fe1-v2959-nsg
+resource "azurerm_network_security_group" "doba-fe1-v2959-nsg" {
+  name                = "doba-fe1-v2959-nsg"
+  location            = azurerm_resource_group.emsd_doba.location
+  resource_group_name = azurerm_resource_group.emsd_doba.name
+
+  security_rule {
+    name                       = "temp-allow-asl-rdp-inbound"
+    priority                   = 100
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "3389"
+    destination_port_range     = "*"
+    source_address_prefix     = "210.3.221.132"
+    destination_address_prefix = "*"
+  }
+}
+
+
+# ========================================================================================
+# VM Section
+# ========================================================================================
+
 # VM no.1 
-resource "azurerm_network_interface" "doba-agt1-v2830" {
-  name = "doba-agt1-v2830"
-  resource_group_name = azurerm_resource_group.emsd_doba.name
-  location            = azurerm_resource_group.emsd_doba.location
+# resource "azurerm_network_interface" "doba-agt1-v2830" {
+#   name = "doba-agt1-v2830"
+#   resource_group_name = azurerm_resource_group.emsd_doba.name
+#   location            = azurerm_resource_group.emsd_doba.location
 
-  ip_configuration {
-    name                          = "ipconfig"
-    subnet_id                     = azurerm_subnet.emsd-doba-agenttier-subnet.id
-    private_ip_address_allocation = "Dynamic"
-    # public_ip_address_id = 
-  }
-}
+#   ip_configuration {
+#     name                          = "ipconfig"
+#     subnet_id                     = azurerm_subnet.emsd-doba-agenttier-subnet.id
+#     private_ip_address_allocation = "Dynamic"
+#     # public_ip_address_id = 
+#   }
+# }
 
-resource "azurerm_recovery_services_vault" "emsd_doba_recovery_vault" {
-  name                = "emsd-doba-recovery-vault"
-  location            = azurerm_resource_group.emsd_doba.location
-  resource_group_name = azurerm_resource_group.emsd_doba.name
-  sku                 = "Standard"
-}
+# resource "azurerm_recovery_services_vault" "emsd_doba_recovery_vault" {
+#   name                = "emsd-doba-recovery-vault"
+#   location            = azurerm_resource_group.emsd_doba.location
+#   resource_group_name = azurerm_resource_group.emsd_doba.name
+#   sku                 = "Standard"
+# }
 
-resource "azurerm_backup_policy_vm" "emsd_doba_backup_policy" {
-  name                = "emsd-doba-daily-policy"
-  resource_group_name = azurerm_resource_group.emsd_doba.name
-  recovery_vault_name = azurerm_recovery_services_vault.emsd_doba_recovery_vault.name
-  policy_type = "V2"
-  instant_restore_retention_days = 2
+# resource "azurerm_backup_policy_vm" "emsd_doba_backup_policy" {
+#   name                = "emsd-doba-daily-policy"
+#   resource_group_name = azurerm_resource_group.emsd_doba.name
+#   recovery_vault_name = azurerm_recovery_services_vault.emsd_doba_recovery_vault.name
+#   policy_type = "V2"
+#   instant_restore_retention_days = 2
 
-  timezone = "UTC"
+#   timezone = "UTC"
 
-  backup {
-    frequency = "Daily"
-    time      = "23:00"
-  }
+#   backup {
+#     frequency = "Daily"
+#     time      = "23:00"
+#   }
 
-  retention_daily {
-    count = 30
-  }
-}
+#   retention_daily {
+#     count = 30
+#   }
+# }
 
-# Load Balancer for VM no.1
-resource "azurerm_lb" "DOBA_LB_AgentAV_Std" {
-  name                = "DOBA_LB_AgentAV_Std"
-  location            = azurerm_resource_group.emsd_doba.location
-  resource_group_name = azurerm_resource_group.emsd_doba.name
-  sku                 = "Standard"
+# # Load Balancer for VM no.1
+# resource "azurerm_lb" "DOBA_LB_AgentAV_Std" {
+#   name                = "DOBA_LB_AgentAV_Std"
+#   location            = azurerm_resource_group.emsd_doba.location
+#   resource_group_name = azurerm_resource_group.emsd_doba.name
+#   sku                 = "Standard"
 
-  frontend_ip_configuration {
-    name                 = "LoadBalancerFrontEnd"
-    subnet_id = azurerm_subnet.emsd-doba-agenttier-subnet.id
-    private_ip_address_allocation = "Static"
-    private_ip_address = "192.168.210.4"
-  }
-}
+#   frontend_ip_configuration {
+#     name                 = "LoadBalancerFrontEnd"
+#     subnet_id = azurerm_subnet.emsd-doba-agenttier-subnet.id
+#     private_ip_address_allocation = "Static"
+#     private_ip_address = "192.168.210.4"
+#   }
+# }
 
-# Backend Pools
-resource "azurerm_lb_backend_address_pool" "DOBA_LB_Backend_pool" {
-  name            = "DOBA_LB_Backend_pool"
-  loadbalancer_id = azurerm_lb.DOBA_LB_AgentAV_Std.id
-}
+# # Backend Pools
+# resource "azurerm_lb_backend_address_pool" "DOBA_LB_Backend_pool" {
+#   name            = "DOBA_LB_Backend_pool"
+#   loadbalancer_id = azurerm_lb.DOBA_LB_AgentAV_Std.id
+# }
 
-# 4. Health Probes
-resource "azurerm_lb_probe" "DOBA_LB_Probe" {
-  loadbalancer_id = azurerm_lb.DOBA_LB_AgentAV_Std.id
-  name            = "DOBA_LB_Probe"
-  port            = 80 # Change to the port your service runs on (e.g., 443)
-}
+# # 4. Health Probes
+# resource "azurerm_lb_probe" "DOBA_LB_Probe" {
+#   loadbalancer_id = azurerm_lb.DOBA_LB_AgentAV_Std.id
+#   name            = "DOBA_LB_Probe"
+#   port            = 80 # Change to the port your service runs on (e.g., 443)
+# }
 
-# 5. Load Balancing Rule
-resource "azurerm_lb_rule" "DOBA_LB_Rule" {
-  loadbalancer_id                = azurerm_lb.DOBA_LB_AgentAV_Std.id
-  name                           = "DOBA_LB_Rule"
-  protocol                       = "Tcp"
-  frontend_port                  = 80
-  backend_port                   = 80
-  frontend_ip_configuration_name = "LoadBalancerFrontEnd"
-  backend_address_pool_ids       = [azurerm_lb_backend_address_pool.DOBA_LB_Backend_pool.id]
-  probe_id                       = azurerm_lb_probe.DOBA_LB_Probe.id
-}
+# # 5. Load Balancing Rule
+# resource "azurerm_lb_rule" "DOBA_LB_Rule" {
+#   loadbalancer_id                = azurerm_lb.DOBA_LB_AgentAV_Std.id
+#   name                           = "DOBA_LB_Rule"
+#   protocol                       = "Tcp"
+#   frontend_port                  = 80
+#   backend_port                   = 80
+#   frontend_ip_configuration_name = "LoadBalancerFrontEnd"
+#   backend_address_pool_ids       = [azurerm_lb_backend_address_pool.DOBA_LB_Backend_pool.id]
+#   probe_id                       = azurerm_lb_probe.DOBA_LB_Probe.id
+# }
 
-resource "azurerm_lb_rule" "DOBA_LB_Rule_https" {
-  loadbalancer_id                = azurerm_lb.DOBA_LB_AgentAV_Std.id
-  name                           = "DOBA_LB_Rule_https"
-  protocol                       = "Tcp"
-  frontend_port                  = 443
-  backend_port                   = 443
-  frontend_ip_configuration_name = "LoadBalancerFrontEnd"
-  backend_address_pool_ids       = [azurerm_lb_backend_address_pool.DOBA_LB_Backend_pool.id]
-  probe_id                       = azurerm_lb_probe.DOBA_LB_Probe.id
-}
+# resource "azurerm_lb_rule" "DOBA_LB_Rule_https" {
+#   loadbalancer_id                = azurerm_lb.DOBA_LB_AgentAV_Std.id
+#   name                           = "DOBA_LB_Rule_https"
+#   protocol                       = "Tcp"
+#   frontend_port                  = 443
+#   backend_port                   = 443
+#   frontend_ip_configuration_name = "LoadBalancerFrontEnd"
+#   backend_address_pool_ids       = [azurerm_lb_backend_address_pool.DOBA_LB_Backend_pool.id]
+#   probe_id                       = azurerm_lb_probe.DOBA_LB_Probe.id
+# }
 
-# 6. Associate your VM's Network Interface to the Load Balancer Backend Pool
-resource "azurerm_network_interface_backend_address_pool_association" "vm_lb_assoc" {
-  network_interface_id    = azurerm_network_interface.doba-agt1-v2830.id
-  ip_configuration_name   = "ipconfig"
-  backend_address_pool_id = azurerm_lb_backend_address_pool.DOBA_LB_Backend_pool.id
-}
+# # 6. Associate your VM's Network Interface to the Load Balancer Backend Pool
+# resource "azurerm_network_interface_backend_address_pool_association" "vm_lb_assoc" {
+#   network_interface_id    = azurerm_network_interface.doba-agt1-v2830.id
+#   ip_configuration_name   = "ipconfig"
+#   backend_address_pool_id = azurerm_lb_backend_address_pool.DOBA_LB_Backend_pool.id
+# }
 
+# # VM no.1
+# resource "azurerm_linux_virtual_machine" "DOBA-AGT1-v2" {
+#   name                  = "DOBA-AGT1-v2"
+#   resource_group_name   = azurerm_resource_group.emsd_doba.name
+#   location              = azurerm_resource_group.emsd_doba.location
+#   size                  = "Standard_D4lds_v5"
+#   admin_username        = "azureuser"
 
-resource "azurerm_linux_virtual_machine" "DOBA-AGT1-v2" {
-  name                  = "DOBA-AGT1-v2"
-  resource_group_name   = azurerm_resource_group.emsd_doba.name
-  location              = azurerm_resource_group.emsd_doba.location
-  size                  = "Standard_D4lds_v5"
-  admin_username        = "azureuser"
+#   network_interface_ids = [azurerm_network_interface.doba-agt1-v2830.id]
 
-  network_interface_ids = [azurerm_network_interface.doba-agt1-v2830.id]
+#   os_disk {
+#     name                 = "DOBA-AGT1-disk-0"
+#     caching              = "ReadWrite"
+#     storage_account_type = "Standard_LRS"
+#   }
+# }
 
-  os_disk {
-    name                 = "DOBA-AGT1-disk-0"
-    caching              = "ReadWrite"
-    storage_account_type = "Standard_LRS"
-  }
-}
+# # VM no.2 
+# resource "azurerm_network_interface" "doba-agt2-v283" {
+#   name = "doba-agt2-v283"
+#   resource_group_name = azurerm_resource_group.emsd_doba.name
+#   location            = azurerm_resource_group.emsd_doba.location
 
-# VM no.2 
-resource "azurerm_network_interface" "doba-agt2-v283" {
-  name = "doba-agt2-v283"
-  resource_group_name = azurerm_resource_group.emsd_doba.name
-  location            = azurerm_resource_group.emsd_doba.location
+#   ip_configuration {
+#     name                          = "ipconfig1"
+#     subnet_id                     = azurerm_subnet.emsd-doba-agenttier-subnet.id
+#     private_ip_address_allocation = "Dynamic"
+#     # public_ip_address_id = 
+#   }
+# }
 
-  ip_configuration {
-    name                          = "ipconfig1"
-    subnet_id                     = azurerm_subnet.emsd-doba-agenttier-subnet.id
-    private_ip_address_allocation = "Dynamic"
-    # public_ip_address_id = 
-  }
-}
+# resource "azurerm_linux_virtual_machine" "DOBA-AGT2-v2" { 
+#   name                  = "DOBA-AGT1-v2"
+#   resource_group_name   = azurerm_resource_group.emsd_doba.name
+#   location              = azurerm_resource_group.emsd_doba.location
+#   size                  = "Standard_D4lds_v5"
+#   admin_username        = "azureuser"
 
-resource "azurerm_linux_virtual_machine" "DOBA-AGT2-v2" { 
-  name                  = "DOBA-AGT1-v2"
-  resource_group_name   = azurerm_resource_group.emsd_doba.name
-  location              = azurerm_resource_group.emsd_doba.location
-  size                  = "Standard_D4lds_v5"
-  admin_username        = "azureuser"
+#   network_interface_ids = [azurerm_network_interface.doba-agt2-v283.id]
 
-  network_interface_ids = [azurerm_network_interface.doba-agt2-v283.id]
-
-  os_disk {
-    name                 = "DOBA-AGT1-disk-0"
-    caching              = "ReadWrite"
-    storage_account_type = "Standard_LRS"
-  }
-}
+#   os_disk {
+#     name                 = "DOBA-AGT1-disk-0"
+#     caching              = "ReadWrite"
+#     storage_account_type = "Standard_LRS"
+#   }
+# }
 
