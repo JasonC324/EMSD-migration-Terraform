@@ -679,103 +679,104 @@ resource "azurerm_network_security_group" "doba-fe1-v2959-nsg" {
 # VM Section
 # ========================================================================================
 
-# VM no.1 
-# resource "azurerm_network_interface" "doba-agt1-v2830" {
-#   name = "doba-agt1-v2830"
-#   resource_group_name = azurerm_resource_group.emsd_doba.name
-#   location            = azurerm_resource_group.emsd_doba.location
+# Network interface for VM no.1 
+resource "azurerm_network_interface" "doba-agt1-v2830" {
+  name = "doba-agt1-v2830"
+  resource_group_name = azurerm_resource_group.emsd_doba.name
+  location            = azurerm_resource_group.emsd_doba.location
 
-#   ip_configuration {
-#     name                          = "ipconfig"
-#     subnet_id                     = azurerm_subnet.emsd-doba-agenttier-subnet.id
-#     private_ip_address_allocation = "Dynamic"
-#     # public_ip_address_id = 
-#   }
-# }
+  ip_configuration {
+    name                          = "ipconfig"
+    subnet_id                     = azurerm_subnet.emsd-doba-agenttier-subnet.id
+    private_ip_address_allocation = "Dynamic"
+    # public_ip_address_id = 
+  }
+}
 
-# resource "azurerm_recovery_services_vault" "emsd_doba_recovery_vault" {
-#   name                = "emsd-doba-recovery-vault"
-#   location            = azurerm_resource_group.emsd_doba.location
-#   resource_group_name = azurerm_resource_group.emsd_doba.name
-#   sku                 = "Standard"
-# }
+# Recovery Service Vault emsd-doba-recovery-vault 
+resource "azurerm_recovery_services_vault" "emsd_doba_recovery_vault" {
+  name                = "emsd-doba-recovery-vault"
+  location            = azurerm_resource_group.emsd_doba.location
+  resource_group_name = azurerm_resource_group.emsd_doba.name
+  sku                 = "Standard"
+}
 
-# resource "azurerm_backup_policy_vm" "emsd_doba_backup_policy" {
-#   name                = "emsd-doba-daily-policy"
-#   resource_group_name = azurerm_resource_group.emsd_doba.name
-#   recovery_vault_name = azurerm_recovery_services_vault.emsd_doba_recovery_vault.name
-#   policy_type = "V2"
-#   instant_restore_retention_days = 2
+resource "azurerm_backup_policy_vm" "emsd_doba_backup_policy" {
+  name                = "emsd-doba-daily-policy"
+  resource_group_name = azurerm_resource_group.emsd_doba.name
+  recovery_vault_name = azurerm_recovery_services_vault.emsd_doba_recovery_vault.name
+  policy_type = "V2"
+  instant_restore_retention_days = 2
 
-#   timezone = "UTC"
+  timezone = "UTC"
 
-#   backup {
-#     frequency = "Daily"
-#     time      = "23:00"
-#   }
+  backup {
+    frequency = "Daily"
+    time      = "23:00"
+  }
 
-#   retention_daily {
-#     count = 30
-#   }
-# }
+  retention_daily {
+    count = 30
+  }
+}
 
-# # Load Balancer for VM no.1
-# resource "azurerm_lb" "DOBA_LB_AgentAV_Std" {
-#   name                = "DOBA_LB_AgentAV_Std"
-#   location            = azurerm_resource_group.emsd_doba.location
-#   resource_group_name = azurerm_resource_group.emsd_doba.name
-#   sku                 = "Standard"
+# Load Balancer for VM no.1
+resource "azurerm_lb" "DOBA_LB_AgentAV_Std" {
+  name                = "DOBA_LB_AgentAV_Std"
+  location            = azurerm_resource_group.emsd_doba.location
+  resource_group_name = azurerm_resource_group.emsd_doba.name
+  sku                 = "Standard"
 
-#   frontend_ip_configuration {
-#     name                 = "LoadBalancerFrontEnd"
-#     subnet_id = azurerm_subnet.emsd-doba-agenttier-subnet.id
-#     private_ip_address_allocation = "Static"
-#     private_ip_address = "192.168.210.4"
-#   }
-# }
+  frontend_ip_configuration {
+    name                 = "LoadBalancerFrontEnd"
+    subnet_id = azurerm_subnet.emsd-doba-agenttier-subnet.id
+    private_ip_address_allocation = "Static"
+    private_ip_address = "192.168.210.4"
+  }
+}
 
-# # Backend Pools
-# resource "azurerm_lb_backend_address_pool" "DOBA_LB_Backend_pool" {
-#   name            = "DOBA_LB_Backend_pool"
-#   loadbalancer_id = azurerm_lb.DOBA_LB_AgentAV_Std.id
-# }
+# Backend Pools
+resource "azurerm_lb_backend_address_pool" "DOBA_LB_Backend_pool" {
+  name            = "DOBA_LB_Backend_pool"
+  loadbalancer_id = azurerm_lb.DOBA_LB_AgentAV_Std.id
+}
 
-# # 4. Health Probes
-# resource "azurerm_lb_probe" "DOBA_LB_Probe" {
-#   loadbalancer_id = azurerm_lb.DOBA_LB_AgentAV_Std.id
-#   name            = "DOBA_LB_Probe"
-#   port            = 80 # Change to the port your service runs on (e.g., 443)
-# }
+# 4. Health Probes
+resource "azurerm_lb_probe" "DOBA_LB_Probe" {
+  loadbalancer_id = azurerm_lb.DOBA_LB_AgentAV_Std.id
+  name            = "DOBA_LB_Probe"
+  port            = 80 
+}
 
-# # 5. Load Balancing Rule
-# resource "azurerm_lb_rule" "DOBA_LB_Rule" {
-#   loadbalancer_id                = azurerm_lb.DOBA_LB_AgentAV_Std.id
-#   name                           = "DOBA_LB_Rule"
-#   protocol                       = "Tcp"
-#   frontend_port                  = 80
-#   backend_port                   = 80
-#   frontend_ip_configuration_name = "LoadBalancerFrontEnd"
-#   backend_address_pool_ids       = [azurerm_lb_backend_address_pool.DOBA_LB_Backend_pool.id]
-#   probe_id                       = azurerm_lb_probe.DOBA_LB_Probe.id
-# }
+# 5. Load Balancing Rule
+resource "azurerm_lb_rule" "DOBA_LB_Rule" {
+  loadbalancer_id                = azurerm_lb.DOBA_LB_AgentAV_Std.id
+  name                           = "DOBA_LB_Rule"
+  protocol                       = "Tcp"
+  frontend_port                  = 80
+  backend_port                   = 80
+  frontend_ip_configuration_name = "LoadBalancerFrontEnd"
+  backend_address_pool_ids       = [azurerm_lb_backend_address_pool.DOBA_LB_Backend_pool.id]
+  probe_id                       = azurerm_lb_probe.DOBA_LB_Probe.id
+}
 
-# resource "azurerm_lb_rule" "DOBA_LB_Rule_https" {
-#   loadbalancer_id                = azurerm_lb.DOBA_LB_AgentAV_Std.id
-#   name                           = "DOBA_LB_Rule_https"
-#   protocol                       = "Tcp"
-#   frontend_port                  = 443
-#   backend_port                   = 443
-#   frontend_ip_configuration_name = "LoadBalancerFrontEnd"
-#   backend_address_pool_ids       = [azurerm_lb_backend_address_pool.DOBA_LB_Backend_pool.id]
-#   probe_id                       = azurerm_lb_probe.DOBA_LB_Probe.id
-# }
+resource "azurerm_lb_rule" "DOBA_LB_Rule_https" {
+  loadbalancer_id                = azurerm_lb.DOBA_LB_AgentAV_Std.id
+  name                           = "DOBA_LB_Rule_https"
+  protocol                       = "Tcp"
+  frontend_port                  = 443
+  backend_port                   = 443
+  frontend_ip_configuration_name = "LoadBalancerFrontEnd"
+  backend_address_pool_ids       = [azurerm_lb_backend_address_pool.DOBA_LB_Backend_pool.id]
+  probe_id                       = azurerm_lb_probe.DOBA_LB_Probe.id
+}
 
-# # 6. Associate your VM's Network Interface to the Load Balancer Backend Pool
-# resource "azurerm_network_interface_backend_address_pool_association" "vm_lb_assoc" {
-#   network_interface_id    = azurerm_network_interface.doba-agt1-v2830.id
-#   ip_configuration_name   = "ipconfig"
-#   backend_address_pool_id = azurerm_lb_backend_address_pool.DOBA_LB_Backend_pool.id
-# }
+# 6. Associate your VM's Network Interface to the Load Balancer Backend Pool
+resource "azurerm_network_interface_backend_address_pool_association" "vm_lb_assoc" {
+  network_interface_id    = azurerm_network_interface.doba-agt1-v2830.id
+  ip_configuration_name   = "ipconfig"
+  backend_address_pool_id = azurerm_lb_backend_address_pool.DOBA_LB_Backend_pool.id
+}
 
 # # VM no.1
 # resource "azurerm_linux_virtual_machine" "DOBA-AGT1-v2" {
